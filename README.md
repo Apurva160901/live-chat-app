@@ -1,47 +1,98 @@
 # 💬 Live Chat Application (Java + React)
 
-A real-time chat application built with **Spring Boot** (Java) and **React**, using
-**WebSockets** for instant messaging and **PostgreSQL + Hibernate/JPA** for storing
-users and message history.
+A full-stack, **real-time chat application** — WhatsApp-style 1:1 messaging built with
+**Spring Boot**, **React**, **WebSockets**, **Kafka** (event-driven), **PostgreSQL**, and
+**JWT** security. Containerized with **Docker Compose**.
 
-> This project is built in phases as a learning + portfolio project. Each concept is
-> documented in the [`docs/`](docs) folder using a fixed format:
-> *what it is → why → how → when → advantages → disadvantages → why here → alternatives.*
+> Built as a learning + portfolio project. Every technology is explained in [`docs/`](docs)
+> using a fixed format: *what → why → how → when → pros → cons → why here → alternatives.*
 
-## 🏗️ Architecture (Phase 1)
+## ✨ Features
+
+- 🔐 **Login / register** with JWT auth (passwords BCrypt-hashed)
+- 👥 **People dashboard** — see everyone who's registered
+- 💬 **Private 1:1 messaging** in real time (WebSocket / STOMP)
+- 🔔 **Unread badges + in-app toasts + desktop notifications** + tab-title count
+- 🖼️ **Profile pictures** (avatar upload)
+- 📎 **Image & file sharing** in chats
+- 🎨 **Themes** (Dark / Light / WhatsApp / Ocean) + **responsive** (mobile → desktop)
+- ⚡ **Event-driven**: messages flow through **Kafka** (decoupled persistence + delivery)
+
+## 🏗️ Architecture
 
 ```
-live-chat-app/
-├─ backend/     Spring Boot app (REST + WebSocket + JPA)
-│  └─ src/main/java/com/apurva/chat/
-├─ frontend/    React app (chat UI)   [coming next]
-└─ docs/        concept explanations + interview prep
+                 ┌─────────────┐   WebSocket + REST    ┌────────────────────────┐
+  Browser  ◄────►│   React     │ ◄───────────────────► │   Spring Boot backend   │
+ (nginx in       │  (frontend) │                        │  Security (JWT) · STOMP │
+  Docker)        └─────────────┘                        │  REST · JPA             │
+                                                        └───────┬─────────┬──────┘
+                                       publish event            │         │
+                                            ▼                   ▼         ▼
+                                      ┌──────────┐        ┌──────────┐  delivers via
+                                      │  Kafka   │──────► │ Postgres │  WebSocket to
+                                      │ topic    │ consume│  (JPA)   │  the recipient
+                                      └──────────┘        └──────────┘
 ```
+
+**Message flow (event-driven):** send → `DmController` **publishes** a `ChatMessageEvent`
+to Kafka → `ChatEventConsumer` **saves** it to Postgres **and delivers** it over WebSocket
+to the recipient + sender.
 
 ## 🧩 Tech stack
 
-| Layer | Technology | Role |
-|-------|-----------|------|
-| Frontend | React | Chat UI in the browser |
-| Real-time | WebSocket (STOMP) | Instant two-way messaging |
-| Backend | Spring Boot (Java 21) | REST APIs + WebSocket server |
-| Persistence | Hibernate / JPA | Map Java objects to DB tables |
-| Database | PostgreSQL | Store users & message history |
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React (Vite), STOMP.js + SockJS |
+| Real-time | WebSocket + STOMP |
+| Backend | Spring Boot (Java) |
+| Security | Spring Security + JWT (BCrypt) |
+| Messaging | Apache Kafka (event-driven) |
+| Persistence | Hibernate / JPA |
+| Database | PostgreSQL |
+| Infra | Docker + Docker Compose, nginx |
 
-## 🗺️ Roadmap
+## 🚀 Run it
 
-- **Phase 1** — Live 1-room chat (Spring Boot + WebSocket + React + Postgres) ← *in progress*
-- Phase 2 — Login (JWT), message history, multiple rooms, presence
-- Phase 3 — Kafka events + notifications (event-driven architecture)
-- Phase 4 — Docker Compose
-- Phase 5 — Camunda moderation workflow
-- Phase 6 — Split into microservices
-- Phase 7 — Interview-prep PDF
+### Option A — Docker Compose (one command)
+```bash
+docker compose up --build
+# then open http://localhost:3000
+```
+This starts PostgreSQL, Kafka, the backend, and the nginx-served frontend, all wired together.
 
-## 🚀 Running (once Phase 1 is complete)
+### Option B — Local dev
+```bash
+# 1. Infra (Postgres + Kafka) via Docker
+docker run -d --name chat-postgres -e POSTGRES_DB=chatdb -e POSTGRES_USER=chatuser \
+  -e POSTGRES_PASSWORD=chatpass -p 5432:5432 postgres:15
+# (plus a Kafka container on 9092)
 
-Instructions will be added here as we build. For now, see [`docs/`](docs).
+# 2. Backend
+cd backend && ./mvnw spring-boot:run    # http://localhost:8080
+
+# 3. Frontend
+cd frontend && npm install && npm run dev   # http://localhost:5173
+```
+
+## 📚 Documentation (`docs/`)
+
+| # | Topic |
+|---|-------|
+| 01 | Maven & Spring Boot |
+| 02 | WebSockets & STOMP |
+| 03 | PostgreSQL, JPA & Hibernate |
+| 04 | React & the WebSocket client |
+| 05 | Kafka & event-driven architecture |
+| 06 | JWT & Spring Security |
+| 07 | Docker & Docker Compose |
+
+## 🗺️ Status & roadmap
+
+- ✅ Real-time chat, persistence, JWT auth, private DMs, avatars, file sharing, notifications
+- ✅ Event-driven messaging with Kafka
+- ✅ Docker Compose
+- ⏭️ Automated tests · live deployment · (optional) Camunda workflow · split into microservices
 
 ---
 
-Built by Apurva Gaikwad · a Java-developer portfolio project
+Built by **Apurva Gaikwad** — a Java full-stack portfolio project.

@@ -30,7 +30,12 @@ export default function Dashboard({ auth, onLogout, onAuthUpdate }) {
   const loadedRef = useRef(new Set());
   const toastTimer = useRef(null);
   const showToastRef = useRef(() => {});
+  const peopleRef = useRef([]);
+  const refreshPeopleRef = useRef(() => {});
   selectedRef.current = selected;
+  peopleRef.current = people;
+  refreshPeopleRef.current = () =>
+    apiGet('/api/users', auth.token).then(setPeople).catch(console.error);
 
   const personOf = (username) => people.find((p) => p.username === username);
   const displayNameOf = (username) => personOf(username)?.displayName || username;
@@ -48,7 +53,10 @@ export default function Dashboard({ auth, onLogout, onAuthUpdate }) {
   }, []);
 
   useEffect(() => {
-    apiGet('/api/users', auth.token).then(setPeople).catch(console.error);
+    refreshPeopleRef.current();
+    // Poll so users who register later show up without a manual refresh.
+    const id = setInterval(() => refreshPeopleRef.current(), 8000);
+    return () => clearInterval(id);
   }, [auth.token]);
 
   useEffect(() => {
@@ -62,6 +70,12 @@ export default function Dashboard({ auth, onLogout, onAuthUpdate }) {
           const msg = JSON.parse(frame.body);
           const other = msg.sender === auth.username ? msg.recipient : msg.sender;
           setConvos((prev) => ({ ...prev, [other]: [...(prev[other] || []), msg] }));
+
+          // If this person isn't in our list yet (registered after we loaded it),
+          // refresh so they appear immediately — no manual refresh needed.
+          if (!peopleRef.current.some((p) => p.username === other)) {
+            refreshPeopleRef.current();
+          }
 
           if (msg.sender !== auth.username) {
             const viewingThisChat = selectedRef.current === msg.sender;
