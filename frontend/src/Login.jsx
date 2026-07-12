@@ -11,6 +11,7 @@ export default function Login({ onAuth }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [email, setEmail] = useState('');
   const [token, setToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [error, setError] = useState('');
@@ -31,7 +32,7 @@ export default function Login({ onAuth }) {
         const path = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
         const body = mode === 'login'
           ? { username, password }
-          : { username, password, displayName };
+          : { username, password, displayName, email };
         const data = await apiPost(path, body);
         onAuth({ token: data.token, username: data.username, displayName: data.displayName, avatarUrl: data.avatarUrl });
       } else if (mode === 'forgot') {
@@ -71,6 +72,10 @@ export default function Login({ onAuth }) {
         {mode === 'register' && (
           <input placeholder="Display name (optional)" value={displayName}
                  onChange={(e) => setDisplayName(e.target.value)} maxLength={30} />
+        )}
+        {mode === 'register' && (
+          <input type="email" placeholder="Email (for password reset)" value={email}
+                 onChange={(e) => setEmail(e.target.value)} />
         )}
 
         {(mode === 'login' || mode === 'register' || mode === 'forgot') && (

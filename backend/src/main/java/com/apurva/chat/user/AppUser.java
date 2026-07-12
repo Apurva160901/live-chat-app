@@ -39,6 +39,10 @@ public class AppUser {
     @Column
     private String avatarUrl;
 
+    /** Email address, collected at registration; used for password-reset emails. */
+    @Column
+    private String email;
+
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
 
@@ -82,6 +86,14 @@ public class AppUser {
 
     public void setAvatarUrl(String avatarUrl) {
         this.avatarUrl = avatarUrl;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
     }
 
     public Instant getCreatedAt() {

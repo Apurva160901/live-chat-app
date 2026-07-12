@@ -19,6 +19,9 @@ import java.util.Map;
 
 /**
  * Registration, login, and password reset. All PUBLIC (no token needed).
+ *
+ * Note: we STORE the user's email at registration, but sending real reset
+ * emails over SMTP is future scope. For now forgot-password returns the token.
  */
 @RestController
 @RequestMapping("/api/auth")
@@ -55,6 +58,9 @@ public class AuthController {
         String display = (req.displayName() == null || req.displayName().isBlank())
                 ? req.username() : req.displayName();
         AppUser user = new AppUser(req.username(), passwordEncoder.encode(req.password()), display);
+        if (req.email() != null && !req.email().isBlank()) {
+            user.setEmail(req.email());
+        }
         users.save(user);
 
         String token = jwtService.generateToken(user.getUsername());
@@ -75,10 +81,7 @@ public class AuthController {
         return new AuthResponse(token, user.getUsername(), user.getDisplayName(), user.getAvatarUrl());
     }
 
-    /**
-     * Step 1 of reset: issue a short-lived token for the account.
-     * NOTE: in production this token is EMAILED to the user, never returned here.
-     */
+    /** Step 1 of reset: issue a short-lived token. (Emailing it is future scope.) */
     @PostMapping("/forgot-password")
     public Map<String, String> forgotPassword(@RequestBody ForgotPasswordRequest req) {
         if (req.username() == null || !users.existsByUsername(req.username())) {
@@ -87,7 +90,7 @@ public class AuthController {
         String token = passwordResetService.createToken(req.username());
         return Map.of(
                 "token", token,
-                "note", "Demo only: in production this token is emailed, not returned.");
+                "note", "Demo: token returned. Emailing it over SMTP is future scope.");
     }
 
     /** Step 2 of reset: exchange a valid token for a new password. */
