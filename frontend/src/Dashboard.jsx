@@ -1,9 +1,31 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import { apiGet, apiUpload } from './api';
 import ThemePicker from './ThemePicker';
 import Avatar from './Avatar';
+
+const EMOJIS = ['😀', '😂', '😍', '👍', '🙏', '🎉', '🔥', '❤️', '😎', '😢', '🤔', '👏', '🙌', '✅', '🚀', '💯'];
+
+// ---- small date/time helpers for the chat UI ----
+function timeLabel(ts) {
+  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+function sameDay(a, b) {
+  return new Date(a).toDateString() === new Date(b).toDateString();
+}
+function dateLabel(ts) {
+  const d = new Date(ts);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return 'Today';
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+}
+function withinGroup(a, b) {
+  return Math.abs(new Date(b).getTime() - new Date(a).getTime()) < 5 * 60 * 1000;
+}
 
 function desktopNotify(msg) {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
@@ -23,6 +45,7 @@ export default function Dashboard({ auth, onLogout, onAuthUpdate }) {
   const [toast, setToast] = useState(null);
   const [input, setInput] = useState('');
   const [connected, setConnected] = useState(false);
+  const [showEmoji, setShowEmoji] = useState(false);
 
   const clientRef = useRef(null);
   const bottomRef = useRef(null);
@@ -218,29 +241,47 @@ export default function Dashboard({ auth, onLogout, onAuthUpdate }) {
 
             <main className="messages">
               {messages.map((m, i) => {
+                const prev = messages[i - 1];
+                const showDate = !prev || !sameDay(prev.timestamp, m.timestamp);
+                const grouped = prev && !showDate && prev.sender === m.sender
+                  && withinGroup(prev.timestamp, m.timestamp);
                 const mine = m.sender === auth.username;
                 return (
-                  <div key={i} className={`bubble-row ${mine ? 'mine' : 'theirs'}`}>
-                    <div className="bubble">
-                      {m.attachmentUrl && m.attachmentType === 'IMAGE' && (
-                        <a href={m.attachmentUrl} target="_blank" rel="noreferrer">
-                          <img className="msg-image" src={m.attachmentUrl} alt={m.attachmentName} />
-                        </a>
-                      )}
-                      {m.attachmentUrl && m.attachmentType !== 'IMAGE' && (
-                        <a className="msg-file" href={m.attachmentUrl} target="_blank" rel="noreferrer" download>
-                          📄 {m.attachmentName || 'Download file'}
-                        </a>
-                      )}
-                      {m.content && <div className="content">{m.content}</div>}
+                  <Fragment key={i}>
+                    {showDate && (
+                      <div className="date-divider"><span>{dateLabel(m.timestamp)}</span></div>
+                    )}
+                    <div className={`bubble-row ${mine ? 'mine' : 'theirs'} ${grouped ? 'grouped' : ''}`}>
+                      <div className="bubble">
+                        {m.attachmentUrl && m.attachmentType === 'IMAGE' && (
+                          <a href={m.attachmentUrl} target="_blank" rel="noreferrer">
+                            <img className="msg-image" src={m.attachmentUrl} alt={m.attachmentName} />
+                          </a>
+                        )}
+                        {m.attachmentUrl && m.attachmentType !== 'IMAGE' && (
+                          <a className="msg-file" href={m.attachmentUrl} target="_blank" rel="noreferrer" download>
+                            📄 {m.attachmentName || 'Download file'}
+                          </a>
+                        )}
+                        {m.content && <div className="content">{m.content}</div>}
+                        <span className="time">{timeLabel(m.timestamp)}</span>
+                      </div>
                     </div>
-                  </div>
+                  </Fragment>
                 );
               })}
               <div ref={bottomRef} />
             </main>
 
             <form className="composer" onSubmit={sendText}>
+              <button type="button" className="emoji-btn" onClick={() => setShowEmoji((v) => !v)} title="Emoji">😊</button>
+              {showEmoji && (
+                <div className="emoji-palette">
+                  {EMOJIS.map((e) => (
+                    <span key={e} onClick={() => { setInput((t) => t + e); setShowEmoji(false); }}>{e}</span>
+                  ))}
+                </div>
+              )}
               <label className="attach-btn" title="Attach image or file">
                 📎
                 <input type="file" hidden onChange={handleAttach} disabled={!connected} />

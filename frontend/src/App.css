@@ -229,3 +229,31 @@ body {
   display: inline-block; color: inherit; text-decoration: underline;
   word-break: break-all;
 }
+
+/* ===== Timestamps, date dividers, grouping, animations, emoji ===== */
+.time { display: block; font-size: 10px; opacity: 0.6; margin-top: 4px; text-align: right; }
+
+.date-divider { text-align: center; margin: 12px 0 6px; }
+.date-divider span {
+  background: var(--panel-2); color: var(--muted);
+  font-size: 11px; padding: 3px 12px; border-radius: 12px;
+}
+
+.bubble-row { animation: popin 0.18s ease-out; }
+.bubble-row.grouped { margin-top: -4px; }
+@keyframes popin {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.emoji-btn { background: none; border: none; font-size: 20px; cursor: pointer; padding: 0 4px; }
+.emoji-palette {
+  position: absolute; bottom: 60px; left: 12px; z-index: 50;
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 8px;
+  display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+.emoji-palette span { font-size: 20px; cursor: pointer; padding: 4px; border-radius: 6px; text-align: center; }
+.emoji-palette span:hover { background: var(--panel); }
+.composer { position: relative; }
