@@ -1,26 +1,26 @@
 package com.apurva.chat.dm;
 
+import com.apurva.chat.kafka.ChatEventProducer;
+import com.apurva.chat.kafka.ChatMessageEvent;
 import org.springframework.messaging.handler.annotation.MessageMapping;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 
 import java.security.Principal;
-import java.time.Instant;
 
 /**
- * Handles private (1:1) messages over WebSocket, including optional attachments.
- * Sender comes from the authenticated WebSocket principal; the message is saved
- * and delivered to both the recipient and the sender via per-user queues.
+ * Receives a 1:1 message over WebSocket and PUBLISHES it as a Kafka event.
+ *
+ * Note what changed for event-driven architecture: this controller no longer
+ * saves to the DB or delivers the message itself. It just fires an event and
+ * returns immediately. The ChatEventConsumer handles persistence + delivery.
  */
 @Controller
 public class DmController {
 
-    private final DirectMessageRepository repo;
-    private final SimpMessagingTemplate messaging;
+    private final ChatEventProducer producer;
 
-    public DmController(DirectMessageRepository repo, SimpMessagingTemplate messaging) {
-        this.repo = repo;
-        this.messaging = messaging;
+    public DmController(ChatEventProducer producer) {
+        this.producer = producer;
     }
 
     @MessageMapping("/dm.send")
@@ -34,19 +34,13 @@ public class DmController {
             return;
         }
 
-        String sender = principal.getName();
-        Instant now = Instant.now();
-        String content = payload.content() == null ? "" : payload.content();
-
-        DirectMessage entity = new DirectMessage(sender, payload.recipient(), content, now);
-        entity.setAttachmentUrl(payload.attachmentUrl());
-        entity.setAttachmentType(payload.attachmentType());
-        entity.setAttachmentName(payload.attachmentName());
-        repo.save(entity);
-
-        DirectMessageDto dto = new DirectMessageDto(sender, payload.recipient(), content, now,
-                payload.attachmentUrl(), payload.attachmentType(), payload.attachmentName());
-        messaging.convertAndSendToUser(payload.recipient(), "/queue/messages", dto);
-        messaging.convertAndSendToUser(sender, "/queue/messages", dto);
+        producer.publish(new ChatMessageEvent(
+                principal.getName(),
+                payload.recipient(),
+                payload.content() == null ? "" : payload.content(),
+                payload.attachmentUrl(),
+                payload.attachmentType(),
+                payload.attachmentName(),
+                System.currentTimeMillis()));
     }
 }

@@ -81,6 +81,12 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Kafka: event-driven messaging (producer/consumer over topics) -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+
         <!-- Testing tools (JUnit, etc.), only used when running tests -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
