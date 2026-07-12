@@ -24,3 +24,7 @@ uploads/
 
 # ---- Logs ----
 *.log
+
+# Personal study material — keep LOCAL, never publish
+docs/*.pdf
+docs/interview-guide.html
