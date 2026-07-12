@@ -9,4 +9,13 @@ export default defineConfig({
   define: {
     global: 'globalThis',
   },
+  server: {
+    proxy: {
+      // Forward REST + WebSocket to the Spring Boot backend so the browser
+      // sees ONE origin (no cross-origin blocking). 'ws: true' proxies the socket.
+      '/api': { target: 'http://localhost:8080', changeOrigin: true },
+      '/ws': { target: 'http://localhost:8080', ws: true, changeOrigin: true },
+      '/uploads': { target: 'http://localhost:8080', changeOrigin: true },
+    },
+  },
 })

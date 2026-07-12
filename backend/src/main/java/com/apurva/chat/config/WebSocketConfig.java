@@ -1,39 +1,81 @@
 package com.apurva.chat.config;
 
+import com.apurva.chat.security.JwtService;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
+import org.springframework.messaging.simp.stomp.StompCommand;
+import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
+import org.springframework.messaging.support.ChannelInterceptor;
+import org.springframework.messaging.support.MessageHeaderAccessor;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
+import java.util.List;
+
 /**
  * WebSocket + STOMP configuration.
  *
- * WebSocket gives us a permanent two-way connection between browser and server.
- * STOMP is a simple messaging protocol on top of it (like "envelopes" with a
- * destination address), so we can do pub/sub: clients subscribe to a topic and
- * the server broadcasts messages to everyone subscribed.
+ * - /topic = broadcast to everyone (public room).
+ * - /queue = per-user private delivery (direct messages).
+ * - /app   = messages the client sends to our @MessageMapping methods.
+ * - /user  = prefix Spring uses to route per-user messages.
+ *
+ * We also authenticate the WebSocket connection using the JWT, so every socket
+ * is tied to a known user — which is what makes private 1:1 messaging possible.
  */
 @Configuration
 @EnableWebSocketMessageBroker
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
+    private final JwtService jwtService;
+
+    public WebSocketConfig(JwtService jwtService) {
+        this.jwtService = jwtService;
+    }
+
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        // Destinations starting with /topic are handled by an in-memory broker
-        // that BROADCASTS each message to all subscribed clients (pub/sub).
-        registry.enableSimpleBroker("/topic");
-
-        // Destinations starting with /app are routed to our @MessageMapping methods
-        // (i.e. messages the client SENDS to the server for processing).
+        registry.enableSimpleBroker("/topic", "/queue");
         registry.setApplicationDestinationPrefixes("/app");
+        registry.setUserDestinationPrefix("/user");
     }
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // The browser opens the WebSocket connection at this URL.
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*") // dev only: allow the React dev server origin
-                .withSockJS();                 // fallback if the browser/network blocks raw WebSocket
+                .setAllowedOriginPatterns("*")
+                .withSockJS();
+    }
+
+    /**
+     * Reads the JWT from the STOMP CONNECT headers and attaches the user to the
+     * session, so the server knows who owns each WebSocket connection.
+     */
+    @Override
+    public void configureClientInboundChannel(ChannelRegistration registration) {
+        registration.interceptors(new ChannelInterceptor() {
+            @Override
+            public Message<?> preSend(Message<?> message, MessageChannel channel) {
+                StompHeaderAccessor accessor =
+                        MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
+                if (accessor != null && StompCommand.CONNECT.equals(accessor.getCommand())) {
+                    String authHeader = accessor.getFirstNativeHeader("Authorization");
+                    if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                        String token = authHeader.substring(7);
+                        if (jwtService.isValid(token)) {
+                            String username = jwtService.extractUsername(token);
+                            var principal = new UsernamePasswordAuthenticationToken(username, null, List.of());
+                            accessor.setUser(principal);
+                        }
+                    }
+                }
+                return message;
+            }
+        });
     }
 }
