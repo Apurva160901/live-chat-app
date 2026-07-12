@@ -148,17 +148,32 @@ export default function Dashboard({ auth, onLogout, onAuthUpdate }) {
   }, [auth.token, auth.username]);
 
   useEffect(() => {
-    if (!selected) return;
-    // Opening the chat = I've read their messages → notify them (shows ✓✓ on their side).
-    if (clientRef.current?.connected) {
-      clientRef.current.publish({ destination: '/app/dm.read', body: JSON.stringify({ recipient: selected }) });
-    }
-    if (loadedRef.current.has(selected)) return;
+    if (!selected || loadedRef.current.has(selected)) return;
     loadedRef.current.add(selected);
     apiGet(`/api/dm/${selected}`, auth.token)
       .then((history) => setConvos((prev) => ({ ...prev, [selected]: history })))
       .catch(console.error);
   }, [selected, auth.token]);
+
+  // Mark the open conversation as READ the instant it's open AND connected.
+  // Fires when you open a chat, and again when the socket connects if the chat
+  // was opened first — so the sender's ✓✓ shows promptly.
+  useEffect(() => {
+    if (selected && connected && clientRef.current?.connected) {
+      clientRef.current.publish({ destination: '/app/dm.read', body: JSON.stringify({ recipient: selected }) });
+    }
+  }, [selected, connected]);
+
+  // Also re-mark read when you return to the tab with a chat open.
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === 'visible' && selectedRef.current && clientRef.current?.connected) {
+        clientRef.current.publish({ destination: '/app/dm.read', body: JSON.stringify({ recipient: selectedRef.current }) });
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   useEffect(() => {
     if (selected) setUnread((prev) => (prev[selected] ? { ...prev, [selected]: 0 } : prev));
