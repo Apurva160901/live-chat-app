@@ -48,6 +48,7 @@ export default function Dashboard({ auth, onLogout, onAuthUpdate }) {
   const [showEmoji, setShowEmoji] = useState(false);
   const [online, setOnline] = useState(() => new Set());
   const [typingUser, setTypingUser] = useState(null);
+  const [readUpTo, setReadUpTo] = useState({});
 
   const clientRef = useRef(null);
   const bottomRef = useRef(null);
@@ -107,7 +108,10 @@ export default function Dashboard({ auth, onLogout, onAuthUpdate }) {
           if (msg.sender !== auth.username) {
             const viewingThisChat = selectedRef.current === msg.sender;
             const tabVisible = document.visibilityState === 'visible';
-            if (!(viewingThisChat && tabVisible)) {
+            if (viewingThisChat && tabVisible) {
+              // I'm looking at this chat → tell the sender I've read it.
+              client.publish({ destination: '/app/dm.read', body: JSON.stringify({ recipient: msg.sender }) });
+            } else {
               setUnread((prev) => ({ ...prev, [msg.sender]: (prev[msg.sender] || 0) + 1 }));
               if (!tabVisible) desktopNotify(msg);
               else showToastRef.current(msg);
@@ -128,6 +132,12 @@ export default function Dashboard({ auth, onLogout, onAuthUpdate }) {
           clearTimeout(typingTimer.current);
           typingTimer.current = setTimeout(() => setTypingUser(null), 3000);
         });
+
+        // Read receipts: someone read my messages (up to time `at`).
+        client.subscribe('/user/queue/read', (frame) => {
+          const { reader, at } = JSON.parse(frame.body);
+          setReadUpTo((prev) => ({ ...prev, [reader]: at }));
+        });
       },
       onDisconnect: () => setConnected(false),
       onStompError: (f) => console.error('STOMP error:', f.headers['message']),
@@ -138,7 +148,12 @@ export default function Dashboard({ auth, onLogout, onAuthUpdate }) {
   }, [auth.token, auth.username]);
 
   useEffect(() => {
-    if (!selected || loadedRef.current.has(selected)) return;
+    if (!selected) return;
+    // Opening the chat = I've read their messages → notify them (shows ✓✓ on their side).
+    if (clientRef.current?.connected) {
+      clientRef.current.publish({ destination: '/app/dm.read', body: JSON.stringify({ recipient: selected }) });
+    }
+    if (loadedRef.current.has(selected)) return;
     loadedRef.current.add(selected);
     apiGet(`/api/dm/${selected}`, auth.token)
       .then((history) => setConvos((prev) => ({ ...prev, [selected]: history })))
@@ -298,7 +313,14 @@ export default function Dashboard({ auth, onLogout, onAuthUpdate }) {
                           </a>
                         )}
                         {m.content && <div className="content">{m.content}</div>}
-                        <span className="time">{timeLabel(m.timestamp)}</span>
+                        <span className="time">
+                          {timeLabel(m.timestamp)}
+                          {mine && (
+                            <span className={`ticks ${new Date(m.timestamp) <= new Date(readUpTo[selected] || 0) ? 'seen' : ''}`}>
+                              {' '}{new Date(m.timestamp) <= new Date(readUpTo[selected] || 0) ? '✓✓' : '✓'}
+                            </span>
+                          )}
+                        </span>
                       </div>
                     </div>
                   </Fragment>
