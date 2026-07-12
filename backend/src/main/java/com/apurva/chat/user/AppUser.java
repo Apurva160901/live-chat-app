@@ -64,6 +64,10 @@ public class AppUser {
         return password;
     }
 
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
     public String getDisplayName() {
         return displayName;
     }

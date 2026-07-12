@@ -15,9 +15,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Map;
+
 /**
- * Registration and login endpoints. These are PUBLIC (no token needed) — you
- * can't have a token before you log in.
+ * Registration, login, and password reset. All PUBLIC (no token needed).
  */
 @RestController
 @RequestMapping("/api/auth")
@@ -28,15 +29,18 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
+    private final PasswordResetService passwordResetService;
 
     public AuthController(UserRepository users,
                           PasswordEncoder passwordEncoder,
                           JwtService jwtService,
-                          AuthenticationManager authenticationManager) {
+                          AuthenticationManager authenticationManager,
+                          PasswordResetService passwordResetService) {
         this.users = users;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.authenticationManager = authenticationManager;
+        this.passwordResetService = passwordResetService;
     }
 
     @PostMapping("/register")
@@ -69,5 +73,37 @@ public class AuthController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username or password"));
         String token = jwtService.generateToken(user.getUsername());
         return new AuthResponse(token, user.getUsername(), user.getDisplayName(), user.getAvatarUrl());
+    }
+
+    /**
+     * Step 1 of reset: issue a short-lived token for the account.
+     * NOTE: in production this token is EMAILED to the user, never returned here.
+     */
+    @PostMapping("/forgot-password")
+    public Map<String, String> forgotPassword(@RequestBody ForgotPasswordRequest req) {
+        if (req.username() == null || !users.existsByUsername(req.username())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No account with that username");
+        }
+        String token = passwordResetService.createToken(req.username());
+        return Map.of(
+                "token", token,
+                "note", "Demo only: in production this token is emailed, not returned.");
+    }
+
+    /** Step 2 of reset: exchange a valid token for a new password. */
+    @PostMapping("/reset-password")
+    public Map<String, String> resetPassword(@RequestBody ResetPasswordRequest req) {
+        if (req.token() == null || req.newPassword() == null || req.newPassword().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Token and new password are required");
+        }
+        String username = passwordResetService.consume(req.token());
+        if (username == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid or expired token");
+        }
+        AppUser user = users.findByUsername(username)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "User not found"));
+        user.setPassword(passwordEncoder.encode(req.newPassword()));
+        users.save(user);
+        return Map.of("message", "Password reset successful. Please log in.");
     }
 }

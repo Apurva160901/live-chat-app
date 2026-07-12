@@ -64,6 +64,7 @@ body {
 .join-card button:hover:not(:disabled) { background: var(--accent-2); }
 .join-card button:disabled { opacity: 0.5; cursor: not-allowed; }
 .error { color: #f87171; font-size: 13px; margin-bottom: 10px; }
+.info { color: #34d399; font-size: 12.5px; margin-bottom: 10px; line-height: 1.4; }
 .switch { margin-top: 14px; font-size: 13px; color: var(--muted); }
 .switch a { color: var(--accent); cursor: pointer; filter: brightness(1.4); }
 .theme-row {
