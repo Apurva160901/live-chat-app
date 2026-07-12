@@ -46,12 +46,16 @@ export default function Dashboard({ auth, onLogout, onAuthUpdate }) {
   const [input, setInput] = useState('');
   const [connected, setConnected] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [online, setOnline] = useState(() => new Set());
+  const [typingUser, setTypingUser] = useState(null);
 
   const clientRef = useRef(null);
   const bottomRef = useRef(null);
   const selectedRef = useRef(null);
   const loadedRef = useRef(new Set());
   const toastTimer = useRef(null);
+  const typingTimer = useRef(null);
+  const lastTypingSent = useRef(0);
   const showToastRef = useRef(() => {});
   const peopleRef = useRef([]);
   const refreshPeopleRef = useRef(() => {});
@@ -110,6 +114,20 @@ export default function Dashboard({ auth, onLogout, onAuthUpdate }) {
             }
           }
         });
+
+        // Presence: who's online (initial fetch + live updates on /topic/presence).
+        apiGet('/api/presence', auth.token).then((list) => setOnline(new Set(list))).catch(() => {});
+        client.subscribe('/topic/presence', (frame) => {
+          try { setOnline(new Set(JSON.parse(frame.body))); } catch { /* ignore */ }
+        });
+
+        // Typing: someone is typing to me → show it for a few seconds.
+        client.subscribe('/user/queue/typing', (frame) => {
+          const { sender } = JSON.parse(frame.body);
+          setTypingUser(sender);
+          clearTimeout(typingTimer.current);
+          typingTimer.current = setTimeout(() => setTypingUser(null), 3000);
+        });
       },
       onDisconnect: () => setConnected(false),
       onStompError: (f) => console.error('STOMP error:', f.headers['message']),
@@ -153,6 +171,16 @@ export default function Dashboard({ auth, onLogout, onAuthUpdate }) {
     if (!content || !selected || !clientRef.current?.connected) return;
     publishDm({ content });
     setInput('');
+  }
+
+  // Update the text box AND (throttled) tell the other person we're typing.
+  function handleTyping(e) {
+    setInput(e.target.value);
+    const now = Date.now();
+    if (selected && clientRef.current?.connected && now - lastTypingSent.current > 1500) {
+      lastTypingSent.current = now;
+      clientRef.current.publish({ destination: '/app/typing', body: JSON.stringify({ recipient: selected }) });
+    }
   }
 
   async function handleAttach(e) {
@@ -218,7 +246,13 @@ export default function Dashboard({ auth, onLogout, onAuthUpdate }) {
               onClick={() => setSelected(p.username)}
             >
               <Avatar name={p.displayName} url={p.avatarUrl} size={40} />
-              <div className="person-name">{p.displayName}<br /><small>@{p.username}</small></div>
+              <div className="person-name">
+                {p.displayName}
+                <br />
+                <small className={online.has(p.username) ? 'online-text' : ''}>
+                  {online.has(p.username) ? '● online' : `@${p.username}`}
+                </small>
+              </div>
               {unread[p.username] > 0 && <span className="badge">{unread[p.username]}</span>}
             </div>
           ))}
@@ -234,8 +268,8 @@ export default function Dashboard({ auth, onLogout, onAuthUpdate }) {
               <button className="back" onClick={() => setSelected(null)}>←</button>
               <Avatar name={displayNameOf(selected)} url={personOf(selected)?.avatarUrl} size={36} />
               <span className="chat-title">{displayNameOf(selected)}</span>
-              <span className={`status ${connected ? 'online' : 'offline'}`}>
-                {connected ? '● online' : '○ connecting…'}
+              <span className={`status ${online.has(selected) ? 'online' : 'offline'}`}>
+                {typingUser === selected ? 'typing…' : (online.has(selected) ? '● online' : 'offline')}
               </span>
             </header>
 
@@ -288,7 +322,7 @@ export default function Dashboard({ auth, onLogout, onAuthUpdate }) {
               </label>
               <input
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={handleTyping}
                 placeholder={connected ? 'Type a message…' : 'Connecting…'}
                 disabled={!connected}
               />

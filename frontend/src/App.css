@@ -169,6 +169,7 @@ body {
 .chat-header .status { margin-left: auto; font-size: 12px; }
 .status.online { color: #34d399; }
 .status.offline { color: var(--muted); }
+.online-text { color: #34d399 !important; font-weight: 600; }
 .back {
   display: none; background: none; border: none; color: var(--text);
   font-size: 22px; cursor: pointer; padding: 0 4px;
